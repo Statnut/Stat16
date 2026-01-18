@@ -13,6 +13,7 @@ section { display: none; padding: 12px; }
 section.active { display: block; }
 input, select, button { margin: 4px 0; padding: 6px; }
 .log { border-top: 1px solid #ccc; margin-top: 10px; padding-top: 10px; }
+.scoreline { font-size: 18px; margin: 8px 0; }
 </style>
 </head>
 
@@ -66,6 +67,11 @@ input, select, button { margin: 4px 0; padding: 6px; }
 <section id="game">
   <h3 id="gameStatus"></h3>
 
+  <div class="scoreline">
+    Score: <span id="scoreAway">0</span> – <span id="scoreHome">0</span><br>
+    Shots: <span id="shotsAway">0</span> – <span id="shotsHome">0</span>
+  </div>
+
   <h2 id="clock">20:00</h2>
   <button id="clockToggle">Start / Stop</button>
   <button id="clockPlus">+1 min</button>
@@ -85,6 +91,11 @@ input, select, button { margin: 4px 0; padding: 6px; }
   </select><br>
   <button id="recordGoal">Record Goal</button>
 
+  <h3>Add Shot</h3>
+  <select id="shotTeam"></select><br>
+  <select id="shotPlayer"></select><br>
+  <button id="recordShot">Record Shot</button>
+
   <div class="log" id="goalLog"></div>
 </section>
 
@@ -99,7 +110,7 @@ const state = {
   clock: { seconds: 1200, running: false, timer: null }
 };
 
-/* ---------- Tabs ---------- */
+/* Tabs */
 document.querySelectorAll('nav button').forEach(b=>{
   b.onclick = () => {
     document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
@@ -109,14 +120,13 @@ document.querySelectorAll('nav button').forEach(b=>{
   };
 });
 
-/* ---------- Seasons ---------- */
+/* Seasons */
 addSeason.onclick = () => {
   if (!seasonName.value) return;
   state.seasons.push(seasonName.value);
   seasonName.value = '';
   renderSeasons();
 };
-
 function renderSeasons() {
   seasonList.innerHTML = state.seasons.join('<br>');
   ngSeason.innerHTML = teamSeason.innerHTML =
@@ -124,7 +134,7 @@ function renderSeasons() {
 }
 renderSeasons();
 
-/* ---------- Teams ---------- */
+/* Teams */
 addTeam.onclick = () => {
   const s = teamSeason.value;
   if (!state.teams[s]) state.teams[s] = [];
@@ -133,7 +143,6 @@ addTeam.onclick = () => {
   teamName.value = teamAbbr.value = '';
   renderTeams();
 };
-
 function renderTeams() {
   teamList.innerHTML = '';
   rosterTeam.innerHTML = ngHome.innerHTML = ngAway.innerHTML = '';
@@ -145,52 +154,53 @@ function renderTeams() {
   });
 }
 
-/* ---------- Roster ---------- */
+/* Roster */
 addPlayer.onclick = () => {
   const t = rosterTeam.value;
   state.rosters[t].push({
     number: playerNum.value,
     name: playerName.value,
-    position: playerPos.value
+    position: playerPos.value,
+    shots: 0
   });
   playerNum.value = playerName.value = '';
   renderRoster();
 };
-
 function renderRoster() {
   rosterList.innerHTML =
     (state.rosters[rosterTeam.value]||[])
       .map(p=>`#${p.number} ${p.name} (${p.position})`).join('<br>');
 }
 
-/* ---------- Goalies ---------- */
+/* Goalies */
 function populateGoalies(team, sel) {
   sel.innerHTML = '';
   (state.rosters[team]||[])
     .filter(p=>p.position==='G')
-    .forEach(g=>{
-      sel.innerHTML += `<option>${g.name}</option>`;
-    });
+    .forEach(g=> sel.innerHTML += `<option>${g.name}</option>`);
 }
 ngHome.onchange = ()=>populateGoalies(ngHome.value, ngHomeG);
 ngAway.onchange = ()=>populateGoalies(ngAway.value, ngAwayG);
 
-/* ---------- Start Game ---------- */
+/* Start Game */
 startGame.onclick = () => {
   state.game = {
     home: ngHome.value,
     away: ngAway.value,
     score: { home:0, away:0 },
+    shots: { home:0, away:0 },
     period: 1,
     goals:[]
   };
   clockReset();
+  updateScore();
   gameStatus.textContent = `Period 1 — ${state.game.away} @ ${state.game.home}`;
   document.querySelector('[data-tab="game"]').click();
   setupGoalUI();
+  setupShotUI();
 };
 
-/* ---------- Clock ---------- */
+/* Clock */
 function renderClock() {
   const m = String(Math.floor(state.clock.seconds/60)).padStart(2,'0');
   const s = String(state.clock.seconds%60).padStart(2,'0');
@@ -221,13 +231,12 @@ advancePeriod.onclick = () => {
   gameStatus.textContent = `Period ${state.game.period} — ${state.game.away} @ ${state.game.home}`;
 };
 
-/* ---------- Goals ---------- */
+/* Goals */
 function setupGoalUI() {
   goalTeam.innerHTML = `<option>Home</option><option>Away</option>`;
   goalTeam.onchange = populateGoalPlayers;
   populateGoalPlayers();
 }
-
 function populateGoalPlayers() {
   const team = goalTeam.value === 'Home' ? state.game.home : state.game.away;
   const list = state.rosters[team]||[];
@@ -236,22 +245,39 @@ function populateGoalPlayers() {
   goalA2.innerHTML =
     `<option></option>` + list.map(p=>`<option>${p.name}</option>`).join('');
 }
-
 recordGoal.onclick = () => {
   const teamKey = goalTeam.value === 'Home' ? 'home' : 'away';
   state.game.score[teamKey]++;
-  const g = {
-    team: teamKey,
-    scorer: goalScorer.value,
-    a1: goalA1.value,
-    a2: goalA2.value,
-    type: goalType.value,
-    period: state.game.period,
-    time: clock.textContent
-  };
-  state.game.goals.push(g);
-  goalLog.innerHTML +=
-    `${g.time} P${g.period} ${g.scorer} (${g.a1||''} ${g.a2||''}) ${g.type}<br>`;
+  state.game.goals.push({});
+  updateScore();
+  goalLog.innerHTML += `${clock.textContent} P${state.game.period} GOAL (${goalType.value})<br>`;
+};
+function updateScore() {
+  scoreHome.textContent = state.game.score.home;
+  scoreAway.textContent = state.game.score.away;
+  shotsHome.textContent = state.game.shots.home;
+  shotsAway.textContent = state.game.shots.away;
+}
+
+/* Shots */
+function setupShotUI() {
+  shotTeam.innerHTML = `<option>Home</option><option>Away</option>`;
+  shotTeam.onchange = populateShotPlayers;
+  populateShotPlayers();
+}
+function populateShotPlayers() {
+  const team = shotTeam.value === 'Home' ? state.game.home : state.game.away;
+  shotPlayer.innerHTML =
+    (state.rosters[team]||[])
+      .map(p=>`<option>${p.name}</option>`).join('');
+}
+recordShot.onclick = () => {
+  const teamKey = shotTeam.value === 'Home' ? 'home' : 'away';
+  state.game.shots[teamKey]++;
+  const team = teamKey === 'home' ? state.game.home : state.game.away;
+  const p = state.rosters[team].find(x=>x.name===shotPlayer.value);
+  if (p) p.shots++;
+  updateScore();
 };
 </script>
 </body>
