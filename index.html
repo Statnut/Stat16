@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hockey Stat Sheet</title>
+
 <style>
 body { font-family: system-ui; margin: 0; }
 nav { display: flex; background: #111; color: white; }
-nav button { flex: 1; padding: 12px; background: none; color: white; border: none; }
+nav button { flex: 1; padding: 12px; border: none; background: none; color: white; }
 nav button.active { background: #333; }
 section { display: none; padding: 12px; }
 section.active { display: block; }
@@ -28,7 +29,7 @@ input, select, button { margin: 4px 0; padding: 6px; }
 
 <section id="seasons" class="active">
   <h3>Seasons</h3>
-  <input id="seasonName" placeholder="Season name" />
+  <input id="seasonName" placeholder="Season name">
   <button id="addSeason">Add Season</button>
   <div id="seasonList"></div>
 </section>
@@ -36,8 +37,8 @@ input, select, button { margin: 4px 0; padding: 6px; }
 <section id="teams">
   <h3>Teams</h3>
   <select id="teamSeason"></select><br>
-  <input id="teamName" placeholder="Team name" />
-  <input id="teamAbbr" placeholder="Abbr" />
+  <input id="teamName" placeholder="Team name">
+  <input id="teamAbbr" placeholder="Abbr">
   <button id="addTeam">Add Team</button>
   <div id="teamList"></div>
 
@@ -96,23 +97,36 @@ input, select, button { margin: 4px 0; padding: 6px; }
   <select id="shotPlayer"></select><br>
   <button id="recordShot">Record Shot</button>
 
-  <div class="log" id="goalLog"></div>
+  <h3>Add Penalty</h3>
+  <select id="penTeam"></select><br>
+  <select id="penPlayer"></select><br>
+  <select id="penType"></select><br>
+  <input id="penMinutes" type="number" value="2" style="width:80px"> minutes<br>
+  <button id="recordPenalty">Record Penalty</button>
+
+  <div class="log" id="eventLog"></div>
 </section>
 
 <script>
 const $ = id => document.getElementById(id);
+
+const penaltyTypes = {
+  "Tripping":2,"Slashing":2,"Hooking":2,"Interference":2,"Holding":2,
+  "High-sticking":2,"Roughing":2,"Boarding":2,"Charging":2,
+  "Cross-checking":2,"Too Many Men":2,"Misconduct":10
+};
 
 const state = {
   seasons: [],
   teams: {},
   rosters: {},
   game: null,
-  clock: { seconds: 1200, running: false, timer: null }
+  clock: { seconds:1200, running:false, timer:null }
 };
 
 /* Tabs */
 document.querySelectorAll('nav button').forEach(b=>{
-  b.onclick = () => {
+  b.onclick = ()=>{
     document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
     document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));
     b.classList.add('active');
@@ -121,164 +135,103 @@ document.querySelectorAll('nav button').forEach(b=>{
 });
 
 /* Seasons */
-addSeason.onclick = () => {
-  if (!seasonName.value) return;
+addSeason.onclick=()=>{
+  if(!seasonName.value)return;
   state.seasons.push(seasonName.value);
-  seasonName.value = '';
-  renderSeasons();
+  seasonName.value='';
+  seasonList.innerHTML=state.seasons.join('<br>');
+  ngSeason.innerHTML=teamSeason.innerHTML=state.seasons.map(s=>`<option>${s}</option>`).join('');
 };
-function renderSeasons() {
-  seasonList.innerHTML = state.seasons.join('<br>');
-  ngSeason.innerHTML = teamSeason.innerHTML =
-    state.seasons.map(s=>`<option>${s}</option>`).join('');
-}
-renderSeasons();
 
 /* Teams */
-addTeam.onclick = () => {
-  const s = teamSeason.value;
-  if (!state.teams[s]) state.teams[s] = [];
-  state.teams[s].push({ name: teamName.value, abbr: teamAbbr.value });
-  state.rosters[teamName.value] = [];
-  teamName.value = teamAbbr.value = '';
+addTeam.onclick=()=>{
+  const s=teamSeason.value;
+  if(!state.teams[s])state.teams[s]=[];
+  state.teams[s].push({name:teamName.value,abbr:teamAbbr.value});
+  state.rosters[teamName.value]=[];
+  teamName.value=teamAbbr.value='';
   renderTeams();
 };
-function renderTeams() {
-  teamList.innerHTML = '';
-  rosterTeam.innerHTML = ngHome.innerHTML = ngAway.innerHTML = '';
+function renderTeams(){
+  teamList.innerHTML='';
+  rosterTeam.innerHTML=ngHome.innerHTML=ngAway.innerHTML='';
   (state.teams[teamSeason.value]||[]).forEach(t=>{
-    teamList.innerHTML += `${t.name} (${t.abbr})<br>`;
-    rosterTeam.innerHTML += `<option>${t.name}</option>`;
-    ngHome.innerHTML += `<option>${t.name}</option>`;
-    ngAway.innerHTML += `<option>${t.name}</option>`;
+    teamList.innerHTML+=`${t.name} (${t.abbr})<br>`;
+    rosterTeam.innerHTML+=`<option>${t.name}</option>`;
+    ngHome.innerHTML+=`<option>${t.name}</option>`;
+    ngAway.innerHTML+=`<option>${t.name}</option>`;
   });
 }
 
 /* Roster */
-addPlayer.onclick = () => {
-  const t = rosterTeam.value;
-  state.rosters[t].push({
-    number: playerNum.value,
-    name: playerName.value,
-    position: playerPos.value,
-    shots: 0
-  });
-  playerNum.value = playerName.value = '';
-  renderRoster();
+addPlayer.onclick=()=>{
+  const t=rosterTeam.value;
+  state.rosters[t].push({number:playerNum.value,name:playerName.value,position:playerPos.value,shots:0,pim:0});
+  playerNum.value=playerName.value='';
+  rosterList.innerHTML=state.rosters[t].map(p=>`#${p.number} ${p.name} (${p.position})`).join('<br>');
 };
-function renderRoster() {
-  rosterList.innerHTML =
-    (state.rosters[rosterTeam.value]||[])
-      .map(p=>`#${p.number} ${p.name} (${p.position})`).join('<br>');
-}
 
 /* Goalies */
-function populateGoalies(team, sel) {
-  sel.innerHTML = '';
-  (state.rosters[team]||[])
-    .filter(p=>p.position==='G')
-    .forEach(g=> sel.innerHTML += `<option>${g.name}</option>`);
+function populateGoalies(team,sel){
+  sel.innerHTML='';
+  (state.rosters[team]||[]).filter(p=>p.position==='G').forEach(g=>sel.innerHTML+=`<option>${g.name}</option>`);
 }
-ngHome.onchange = ()=>populateGoalies(ngHome.value, ngHomeG);
-ngAway.onchange = ()=>populateGoalies(ngAway.value, ngAwayG);
+ngHome.onchange=()=>populateGoalies(ngHome.value,ngHomeG);
+ngAway.onchange=()=>populateGoalies(ngAway.value,ngAwayG);
 
 /* Start Game */
-startGame.onclick = () => {
-  state.game = {
-    home: ngHome.value,
-    away: ngAway.value,
-    score: { home:0, away:0 },
-    shots: { home:0, away:0 },
-    period: 1,
-    goals:[]
-  };
-  clockReset();
+startGame.onclick=()=>{
+  state.game={home:ngHome.value,away:ngAway.value,score:{home:0,away:0},shots:{home:0,away:0},period:1};
+  resetClock();
   updateScore();
-  gameStatus.textContent = `Period 1 — ${state.game.away} @ ${state.game.home}`;
+  gameStatus.textContent=`Period 1 — ${state.game.away} @ ${state.game.home}`;
   document.querySelector('[data-tab="game"]').click();
-  setupGoalUI();
-  setupShotUI();
+  setupGameSelectors();
 };
 
 /* Clock */
-function renderClock() {
-  const m = String(Math.floor(state.clock.seconds/60)).padStart(2,'0');
-  const s = String(state.clock.seconds%60).padStart(2,'0');
-  clock.textContent = `${m}:${s}`;
-}
-function clockReset() {
-  state.clock.seconds = 1200;
-  renderClock();
-}
-clockToggle.onclick = () => {
-  state.clock.running = !state.clock.running;
-  if (state.clock.running) {
-    state.clock.timer = setInterval(()=>{
-      if (state.clock.seconds>0) {
-        state.clock.seconds--;
-        renderClock();
-      }
-    },1000);
+function renderClock(){clock.textContent=`${String(Math.floor(state.clock.seconds/60)).padStart(2,'0')}:${String(state.clock.seconds%60).padStart(2,'0')}`;}
+function resetClock(){state.clock.seconds=1200;renderClock();}
+clockToggle.onclick=()=>{
+  state.clock.running=!state.clock.running;
+  if(state.clock.running){
+    state.clock.timer=setInterval(()=>{if(state.clock.seconds>0){state.clock.seconds--;renderClock();}},1000);
   } else clearInterval(state.clock.timer);
 };
-clockPlus.onclick = () => {
-  state.clock.seconds = Math.max(0, state.clock.seconds-60);
-  renderClock();
-};
-advancePeriod.onclick = () => {
-  state.game.period++;
-  clockReset();
-  gameStatus.textContent = `Period ${state.game.period} — ${state.game.away} @ ${state.game.home}`;
-};
+clockPlus.onclick=()=>{state.clock.seconds=Math.max(0,state.clock.seconds-60);renderClock();};
+advancePeriod.onclick=()=>{state.game.period++;resetClock();gameStatus.textContent=`Period ${state.game.period} — ${state.game.away} @ ${state.game.home}`;};
 
-/* Goals */
-function setupGoalUI() {
-  goalTeam.innerHTML = `<option>Home</option><option>Away</option>`;
-  goalTeam.onchange = populateGoalPlayers;
-  populateGoalPlayers();
+/* Goals + Shots + Penalties */
+function setupGameSelectors(){
+  goalTeam.innerHTML=shotTeam.innerHTML=penTeam.innerHTML='<option>Home</option><option>Away</option>';
+  goalTeam.onchange=shotTeam.onchange=penTeam.onchange=populatePlayers;
+  penType.innerHTML=Object.keys(penaltyTypes).map(p=>`<option>${p}</option>`).join('');
+  penType.onchange=()=>penMinutes.value=penaltyTypes[penType.value];
+  populatePlayers();
 }
-function populateGoalPlayers() {
-  const team = goalTeam.value === 'Home' ? state.game.home : state.game.away;
-  const list = state.rosters[team]||[];
-  goalScorer.innerHTML =
-  goalA1.innerHTML =
-  goalA2.innerHTML =
-    `<option></option>` + list.map(p=>`<option>${p.name}</option>`).join('');
-}
-recordGoal.onclick = () => {
-  const teamKey = goalTeam.value === 'Home' ? 'home' : 'away';
-  state.game.score[teamKey]++;
-  state.game.goals.push({});
-  updateScore();
-  goalLog.innerHTML += `${clock.textContent} P${state.game.period} GOAL (${goalType.value})<br>`;
-};
-function updateScore() {
-  scoreHome.textContent = state.game.score.home;
-  scoreAway.textContent = state.game.score.away;
-  shotsHome.textContent = state.game.shots.home;
-  shotsAway.textContent = state.game.shots.away;
+function populatePlayers(){
+  const teamKey=this?.value==='Away'?'away':'home';
+  const team=state.game[teamKey];
+  const list=state.rosters[team]||[];
+  goalScorer.innerHTML=goalA1.innerHTML=goalA2.innerHTML=shotPlayer.innerHTML=penPlayer.innerHTML='<option></option>'+list.map(p=>`<option>${p.name}</option>`).join('');
 }
 
-/* Shots */
-function setupShotUI() {
-  shotTeam.innerHTML = `<option>Home</option><option>Away</option>`;
-  shotTeam.onchange = populateShotPlayers;
-  populateShotPlayers();
-}
-function populateShotPlayers() {
-  const team = shotTeam.value === 'Home' ? state.game.home : state.game.away;
-  shotPlayer.innerHTML =
-    (state.rosters[team]||[])
-      .map(p=>`<option>${p.name}</option>`).join('');
-}
-recordShot.onclick = () => {
-  const teamKey = shotTeam.value === 'Home' ? 'home' : 'away';
-  state.game.shots[teamKey]++;
-  const team = teamKey === 'home' ? state.game.home : state.game.away;
-  const p = state.rosters[team].find(x=>x.name===shotPlayer.value);
-  if (p) p.shots++;
-  updateScore();
+recordGoal.onclick=()=>{state.game.score[goalTeam.value==='Home'?'home':'away']++;updateScore();eventLog.innerHTML+=`${clock.textContent} P${state.game.period} GOAL (${goalType.value})<br>`;};
+recordShot.onclick=()=>{state.game.shots[shotTeam.value==='Home'?'home':'away']++;updateScore();};
+recordPenalty.onclick=()=>{
+  const teamKey=penTeam.value==='Home'?'home':'away';
+  const team=state.game[teamKey];
+  const p=state.rosters[team].find(x=>x.name===penPlayer.value);
+  if(p)p.pim+=Number(penMinutes.value);
+  eventLog.innerHTML+=`${clock.textContent} P${state.game.period} PEN ${penPlayer.value} ${penType.value} ${penMinutes.value}m<br>`;
 };
+
+function updateScore(){
+  scoreHome.textContent=state.game.score.home;
+  scoreAway.textContent=state.game.score.away;
+  shotsHome.textContent=state.game.shots.home;
+  shotsAway.textContent=state.game.shots.away;
+}
 </script>
 </body>
 </html>
